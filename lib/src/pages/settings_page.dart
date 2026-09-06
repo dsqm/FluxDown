@@ -2363,27 +2363,8 @@ class _CustomCategoryManager extends StatelessWidget {
 
   const _CustomCategoryManager({required this.settingsProvider});
 
-  /// 内置分类的 i18n 名称。这些文案不只是标签：「一键分类目录」拿它当目录名
-  /// （`categoryDirUnder`），Web 侧 `web/src/lib/categories.ts` 的 BUILTIN_LABEL
-  /// 必须逐字一致，否则两端会在同一台机器上建出两套目录。
-  static String _builtinLabel(S s, String? builtinType) =>
-      switch (builtinType) {
-        'all' => s.categoryAll,
-        'video' => s.categoryVideo,
-        'audio' => s.categoryAudio,
-        'document' => s.categoryDocument,
-        'image' => s.categoryImage,
-        'program' => s.categoryProgram,
-        'archive' => s.categoryArchive,
-        'other' => s.categoryOther,
-        _ => '',
-      };
-
   /// 获取分类显示名称（内置用 i18n，自定义用用户设置的名称）
-  static String displayName(S s, CustomCategory cat) {
-    if (cat.isBuiltin) return _builtinLabel(s, cat.builtinType);
-    return cat.name;
-  }
+  static String displayName(S s, CustomCategory cat) => cat.displayName(s);
 
   @override
   Widget build(BuildContext context) {

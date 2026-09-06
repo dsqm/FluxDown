@@ -77,33 +77,13 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       (widget.existing?.builtinType == 'all' ||
           widget.existing?.builtinType == 'other');
 
-  /// 内置分类 builtinType -> 本地化显示名的映射；键需覆盖
-  /// CustomCategory.defaultCategories 中出现的所有取值。
-  static String _builtinNameLabel(S s, String? builtinType) =>
-      switch (builtinType) {
-        'all' => s.categoryAll,
-        'video' => s.categoryVideo,
-        'audio' => s.categoryAudio,
-        'document' => s.categoryDocument,
-        'image' => s.categoryImage,
-        'program' => s.categoryProgram,
-        'archive' => s.categoryArchive,
-        'other' => s.categoryOther,
-        _ => '',
-      };
-
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
-    _nameCtrl = TextEditingController(
-      text: _isBuiltin
-          ? _builtinNameLabel(widget.s, e?.builtinType)
-          : (e?.name ?? ''),
-    );
-    _extCtrl = TextEditingController(
-      text: e?.extensions.join(', ') ?? '',
-    );
+    // 内置分类名称只读展示本地化名（而非内部 key），保存时沿用原 name。
+    _nameCtrl = TextEditingController(text: e?.displayName(widget.s) ?? '');
+    _extCtrl = TextEditingController(text: e?.extensions.join(', ') ?? '');
     _regexCtrl = TextEditingController(text: e?.regexPattern ?? '');
     _matchMode = e?.matchMode ?? MatchMode.extension;
     _selectedIcon = e?.icon ?? CategoryIcon.file;

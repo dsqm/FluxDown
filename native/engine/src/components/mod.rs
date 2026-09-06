@@ -81,24 +81,23 @@ const FALLBACK_DIRS: &[&str] = &[];
 /// PATH 扫描失败时，在类 Unix 平台回退探测 [`FALLBACK_DIRS`]（Homebrew 等
 /// 固定安装目录），不改变 PATH 内目录的优先级。
 pub fn find_in_path(binary_name: &str) -> Option<PathBuf> {
-    if let Some(path_var) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path_var) {
-            if dir.as_os_str().is_empty() {
-                continue;
-            }
-            let candidate = dir.join(binary_name);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-    for dir in FALLBACK_DIRS {
-        let candidate = PathBuf::from(dir).join(binary_name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
+    let path_var = std::env::var_os("PATH");
+    let path_dirs = path_var
+        .as_deref()
+        .map(std::env::split_paths)
+        .into_iter()
+        .flatten();
+    let fallback = FALLBACK_DIRS.iter().map(PathBuf::from);
+    find_in_dirs(path_dirs.chain(fallback), binary_name)
+}
+
+/// 按给定顺序在目录列表中查找第一个存在的 `dir/binary_name` 常规文件；
+/// 空目录项跳过。纯函数，不读环境变量，便于测试。
+fn find_in_dirs(dirs: impl IntoIterator<Item = PathBuf>, binary_name: &str) -> Option<PathBuf> {
+    dirs.into_iter()
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .map(|dir| dir.join(binary_name))
+        .find(|candidate| candidate.is_file())
 }
 
 /// GitHub Release API JSON 拉取（带 `User-Agent`/`Accept` 头）。ffmpeg / yt-dlp
@@ -199,6 +198,8 @@ pub(crate) async fn download_to_file(
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::ComponentSource;
 
     #[test]
@@ -209,68 +210,35 @@ mod tests {
         assert_eq!(ComponentSource::None.as_str(), "none");
     }
 
-    /// `find_in_path` 在正常 PATH 中命中：验证重构后（PATH 缺失/回退目录分支）
-    /// 主扫描逻辑未被破坏。使用临时目录构造的假文件，不依赖真实二进制。
+    /// 目录顺序即优先级：前面的目录命中即返回，空目录项被跳过，缺失目录
+    /// 不影响后续（模拟 PATH 未命中后回退到 Homebrew 目录）。
     #[test]
-    fn find_in_path_scans_path_env_dirs() {
-        let dir = std::env::temp_dir().join(format!(
-            "fluxdown-find-in-path-test-{}-{}",
+    fn find_in_dirs_respects_order_and_skips_empty_or_missing() {
+        let root = std::env::temp_dir().join(format!(
+            "fluxdown-find-in-dirs-{}-{}",
             std::process::id(),
             line!()
         ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let binary_name = "fluxdown-test-binary";
-        let candidate = dir.join(binary_name);
-        std::fs::write(&candidate, b"").unwrap();
+        let first = root.join("first");
+        let second = root.join("second");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        let name = "fluxdown-test-binary";
+        std::fs::write(second.join(name), b"").unwrap();
+        // `first` 里只有同名目录，不是文件，不应命中。
+        std::fs::create_dir_all(first.join(name)).unwrap();
 
-        let original_path = std::env::var_os("PATH");
-        // SAFETY: test-only, single-process-per-test under nextest; restored below.
-        unsafe {
-            std::env::set_var("PATH", &dir);
-        }
+        let dirs = vec![
+            PathBuf::new(),
+            root.join("missing"),
+            first.clone(),
+            second.clone(),
+        ];
+        let found = super::find_in_dirs(dirs, name);
+        let none = super::find_in_dirs([first, second], "fluxdown-definitely-not-installed");
+        let _ = std::fs::remove_dir_all(&root);
 
-        let found = super::find_in_path(binary_name);
-
-        // SAFETY: restoring the pre-test value.
-        unsafe {
-            match &original_path {
-                Some(p) => std::env::set_var("PATH", p),
-                None => std::env::remove_var("PATH"),
-            }
-        }
-        let _ = std::fs::remove_dir_all(&dir);
-
-        assert_eq!(found, Some(candidate));
-    }
-
-    /// PATH 未命中且不含任何回退目录时（非 unix 平台，或 unix 上回退目录本身
-    /// 未命中），必须返回 `None`，不误报。
-    #[test]
-    fn find_in_path_returns_none_when_missing_everywhere() {
-        let dir = std::env::temp_dir().join(format!(
-            "fluxdown-find-in-path-empty-{}-{}",
-            std::process::id(),
-            line!()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let original_path = std::env::var_os("PATH");
-        // SAFETY: test-only, single-process-per-test under nextest; restored below.
-        unsafe {
-            std::env::set_var("PATH", &dir);
-        }
-
-        let found = super::find_in_path("fluxdown-definitely-not-installed-binary");
-
-        // SAFETY: restoring the pre-test value.
-        unsafe {
-            match &original_path {
-                Some(p) => std::env::set_var("PATH", p),
-                None => std::env::remove_var("PATH"),
-            }
-        }
-        let _ = std::fs::remove_dir_all(&dir);
-
-        assert_eq!(found, None);
+        assert_eq!(found, Some(root.join("second").join(name)));
+        assert_eq!(none, None);
     }
 }
