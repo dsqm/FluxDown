@@ -66,14 +66,34 @@ pub enum ComponentError {
     Verify(String),
 }
 
+/// macOS/Linux 上 Homebrew（及部分发行版自装软件）常见的固定安装目录。
+/// GUI 应用进程继承的 PATH 往往不含这些目录（Finder/启动台启动时 shell
+/// 登录脚本未执行），仅在 PATH 扫描失败后作为兜底，不改变 PATH 内的优先级。
+#[cfg(target_os = "macos")]
+const FALLBACK_DIRS: &[&str] = &["/opt/homebrew/bin", "/usr/local/bin"];
+#[cfg(all(unix, not(target_os = "macos")))]
+const FALLBACK_DIRS: &[&str] = &["/usr/local/bin"];
+#[cfg(not(unix))]
+const FALLBACK_DIRS: &[&str] = &[];
+
 /// 扫描系统 PATH 寻找指定可执行文件（含 Windows 的 `.exe` 后缀由调用方带入）。
+///
+/// PATH 扫描失败时，在类 Unix 平台回退探测 [`FALLBACK_DIRS`]（Homebrew 等
+/// 固定安装目录），不改变 PATH 内目录的优先级。
 pub fn find_in_path(binary_name: &str) -> Option<PathBuf> {
-    let path_var = std::env::var_os("PATH")?;
-    for dir in std::env::split_paths(&path_var) {
-        if dir.as_os_str().is_empty() {
-            continue;
+    if let Some(path_var) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            if dir.as_os_str().is_empty() {
+                continue;
+            }
+            let candidate = dir.join(binary_name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
         }
-        let candidate = dir.join(binary_name);
+    }
+    for dir in FALLBACK_DIRS {
+        let candidate = PathBuf::from(dir).join(binary_name);
         if candidate.is_file() {
             return Some(candidate);
         }
@@ -187,5 +207,70 @@ mod tests {
         assert_eq!(ComponentSource::Managed.as_str(), "managed");
         assert_eq!(ComponentSource::System.as_str(), "system");
         assert_eq!(ComponentSource::None.as_str(), "none");
+    }
+
+    /// `find_in_path` 在正常 PATH 中命中：验证重构后（PATH 缺失/回退目录分支）
+    /// 主扫描逻辑未被破坏。使用临时目录构造的假文件，不依赖真实二进制。
+    #[test]
+    fn find_in_path_scans_path_env_dirs() {
+        let dir = std::env::temp_dir().join(format!(
+            "fluxdown-find-in-path-test-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let binary_name = "fluxdown-test-binary";
+        let candidate = dir.join(binary_name);
+        std::fs::write(&candidate, b"").unwrap();
+
+        let original_path = std::env::var_os("PATH");
+        // SAFETY: test-only, single-process-per-test under nextest; restored below.
+        unsafe {
+            std::env::set_var("PATH", &dir);
+        }
+
+        let found = super::find_in_path(binary_name);
+
+        // SAFETY: restoring the pre-test value.
+        unsafe {
+            match &original_path {
+                Some(p) => std::env::set_var("PATH", p),
+                None => std::env::remove_var("PATH"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(found, Some(candidate));
+    }
+
+    /// PATH 未命中且不含任何回退目录时（非 unix 平台，或 unix 上回退目录本身
+    /// 未命中），必须返回 `None`，不误报。
+    #[test]
+    fn find_in_path_returns_none_when_missing_everywhere() {
+        let dir = std::env::temp_dir().join(format!(
+            "fluxdown-find-in-path-empty-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let original_path = std::env::var_os("PATH");
+        // SAFETY: test-only, single-process-per-test under nextest; restored below.
+        unsafe {
+            std::env::set_var("PATH", &dir);
+        }
+
+        let found = super::find_in_path("fluxdown-definitely-not-installed-binary");
+
+        // SAFETY: restoring the pre-test value.
+        unsafe {
+            match &original_path {
+                Some(p) => std::env::set_var("PATH", p),
+                None => std::env::remove_var("PATH"),
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(found, None);
     }
 }
