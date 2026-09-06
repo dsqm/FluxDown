@@ -1169,10 +1169,10 @@ mod inner {
     /// so that the correct path is returned even when the process is launched
     /// by a system service (launchd) that may not set `$HOME`.
     fn home_dir() -> Option<PathBuf> {
-        if let Ok(h) = std::env::var("HOME") {
-            if !h.is_empty() {
-                return Some(PathBuf::from(h));
-            }
+        if let Ok(h) = std::env::var("HOME")
+            && !h.is_empty()
+        {
+            return Some(PathBuf::from(h));
         }
         use std::ffi::CStr;
         let uid = unsafe { libc::getuid() };
@@ -1198,10 +1198,10 @@ mod inner {
             let pwd = unsafe { pwd.assume_init() };
             if !pwd.pw_dir.is_null() {
                 let cstr = unsafe { CStr::from_ptr(pwd.pw_dir) };
-                if let Ok(s) = cstr.to_str() {
-                    if !s.is_empty() {
-                        return Some(PathBuf::from(s));
-                    }
+                if let Ok(s) = cstr.to_str()
+                    && !s.is_empty()
+                {
+                    return Some(PathBuf::from(s));
                 }
             }
         }

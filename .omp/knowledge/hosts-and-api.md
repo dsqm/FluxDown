@@ -44,6 +44,7 @@ aria2c 风格。命令：ping/info/add(get)/list(ls)/status(stat)/pause/resume/r
 
 ### `native/nmh`
 浏览器 Native Messaging Host **中继二进制**（`com.fluxdown.nmh`）。浏览器 ↔（stdin/stdout 4 字节 LE 长度 + JSON）↔ nmh ↔（Named Pipe / UDS）↔ App。同步单线程；懒连 + 重连；除 `NO_LAUNCH_ACTIONS`(ping/tasks/task_op/open/reveal) 外未连接时自动拉起 App（50ms 轮询至 10s）；`warmup` 本地应答重叠冷启动；1MB 帧上限。
+冷启动目标按 `APP_EXE_CANDIDATES` 在 nmh 同级目录顺序查找：**Flutter 本体在前**（`flux_down.exe` / `FluxDown` / `flux_down`），`fluxdown-agent` 只在无 Flutter 可执行时兜底——release 把两套二进制打进同一目录，顺序反了会让 agent→fluxdownd 抢走 `<data_dir>/engine.lock`，Flutter 引擎随后起不来。
 
 ### `native/fluxdown_updater`（**新**独立 helper）
 依赖极简（zip/flate2/tar/windows-sys/libc，无 engine/api 依赖）。由 `hub/updater.rs` 在 App 退出前拉起 → 等父 PID 死 → 应用更新 + 重启。Action：PortableZip/Setup(NSIS 静默)/AppImage/tarball/deb/arch(pkexec)。用原生 helper 而非 PS/bat/sh 规避 MOTW/执行策略/引号问题。
