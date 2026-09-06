@@ -1,0 +1,43 @@
+# 临时 CI（fork 用）：对任意 ref 编译检查 hub/agent，验证后可删除本分支。
+name: Compile Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to compile
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Rust fmt + clippy (${{ matrix.crate }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [fluxdown_hub, fluxdown_agent]
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: compile-check-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: compile-check-${{ runner.os }}-
+      - name: rustfmt
+        run: cargo fmt --check -p ${{ matrix.crate }}
+      - name: clippy
+        run: cargo clippy --locked -p ${{ matrix.crate }} -- -D warnings
