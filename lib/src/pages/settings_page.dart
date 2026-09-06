@@ -2300,6 +2300,15 @@ class _GeneralContent extends StatelessWidget {
               subtitle: s.titlebarButtonsDesc,
               children: [
                 _SettingRow(
+                  label: s.showTitlebarNewDownload,
+                  description: s.showTitlebarNewDownloadDesc,
+                  child: ShadSwitch(
+                    value: settingsProvider.showTitlebarNewDownload,
+                    onChanged: (v) =>
+                        settingsProvider.setShowTitlebarNewDownload(v),
+                  ),
+                ),
+                _SettingRow(
                   label: s.showTitlebarPauseAll,
                   description: s.showTitlebarPauseAllDesc,
                   child: ShadSwitch(
