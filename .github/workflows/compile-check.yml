@@ -2,6 +2,9 @@
 name: Compile Check
 
 on:
+  push:
+    branches:
+      - ci/compile-check
   workflow_dispatch:
     inputs:
       ref:
@@ -19,12 +22,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [fluxdown_hub, fluxdown_agent]
+        crate: [hub, fluxdown_agent]
     steps:
       - name: Checkout selected ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || 'main' }}
           fetch-depth: 0
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -40,4 +43,5 @@ jobs:
       - name: rustfmt
         run: cargo fmt --check -p ${{ matrix.crate }}
       - name: clippy
+        if: always()
         run: cargo clippy --locked -p ${{ matrix.crate }} -- -D warnings
