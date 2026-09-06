@@ -65,20 +65,42 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   late final TextEditingController _saveDirCtrl;
   bool _isDirPicking = false;
 
+  /// 是否为内置分类（内置分类的名称不可由用户改写）。
+  bool get _isBuiltin => widget.existing?.isBuiltin == true;
+
   /// 是否隐藏"匹配规则"区域。
   /// - 'all'：完全锁定，不可编辑。
   /// - 'other'：用排除逻辑匹配，无显式规则，仍隐藏此区域；
   ///            但允许编辑名称、图标和保存路径（sidebar 已解除限制）。
   bool get _isSpecialBuiltin =>
-      widget.existing?.isBuiltin == true &&
+      _isBuiltin &&
       (widget.existing?.builtinType == 'all' ||
           widget.existing?.builtinType == 'other');
+
+  /// 内置分类 builtinType -> 本地化显示名的映射；键需覆盖
+  /// CustomCategory.defaultCategories 中出现的所有取值。
+  static String _builtinNameLabel(S s, String? builtinType) =>
+      switch (builtinType) {
+        'all' => s.categoryAll,
+        'video' => s.categoryVideo,
+        'audio' => s.categoryAudio,
+        'document' => s.categoryDocument,
+        'image' => s.categoryImage,
+        'program' => s.categoryProgram,
+        'archive' => s.categoryArchive,
+        'other' => s.categoryOther,
+        _ => '',
+      };
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
-    _nameCtrl = TextEditingController(text: e?.name ?? '');
+    _nameCtrl = TextEditingController(
+      text: _isBuiltin
+          ? _builtinNameLabel(widget.s, e?.builtinType)
+          : (e?.name ?? ''),
+    );
     _extCtrl = TextEditingController(
       text: e?.extensions.join(', ') ?? '',
     );
@@ -122,8 +144,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   void _save() {
-    final name = _nameCtrl.text.trim();
-    if (name.isEmpty && !(widget.existing?.isBuiltin ?? false)) {
+    final name = _isBuiltin ? widget.existing!.name : _nameCtrl.text.trim();
+    if (name.isEmpty && !_isBuiltin) {
       setState(() => _error = widget.s.categoryNameRequired);
       return;
     }
@@ -247,7 +269,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
             ShadInput(
               controller: _nameCtrl,
               placeholder: Text(s.categoryNameHint),
-              autofocus: true,
+              enabled: !_isBuiltin,
+              autofocus: !_isBuiltin,
             ),
             const SizedBox(height: 12),
             // 图标选择
