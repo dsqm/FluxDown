@@ -1631,6 +1631,7 @@ class _NewDownloadDialogContentState extends State<_NewDownloadDialogContent> {
                           child: TextField(
                             controller: _urlController,
                             focusNode: _urlFocusNode,
+                            autofocus: true,
                             maxLines: null,
                             expands: true,
                             textAlignVertical: TextAlignVertical.top,
