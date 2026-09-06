@@ -357,7 +357,7 @@ class HeaderBarState extends State<HeaderBar> {
                               border: Border.all(color: c.border, width: 1),
                             ),
                             child: Text(
-                              'Ctrl+F',
+                              Platform.isMacOS ? '⌘F' : 'Ctrl+F',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: c.textMuted,
